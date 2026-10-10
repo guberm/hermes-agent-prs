@@ -1616,6 +1616,7 @@
   "settings.plugins.installModal.insecureWarning": ["ar","ja","zh-hant"],
   "settings.plugins.installModal.install": ["ar","ja","zh-hant"],
   "settings.plugins.installModal.installFromGit": ["ar","ru"],
+  "settings.plugins.installModal.installPythonDependencies": ["ar","de","es","fr","ja","zh","zh-hant"],
   "settings.plugins.installModal.installing": ["ar","ja","zh-hant"],
   "settings.plugins.installModal.missingEnv": ["ar","ja","zh-hant"],
   "settings.plugins.installModal.missingEnvAction": ["ar","ja","ru","zh-hant"],

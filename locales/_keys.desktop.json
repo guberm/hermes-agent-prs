@@ -3602,6 +3602,7 @@
     "settings.plugins.installModal.insecureWarning",
     "settings.plugins.installModal.install",
     "settings.plugins.installModal.installFromGit",
+    "settings.plugins.installModal.installPythonDependencies",
     "settings.plugins.installModal.installUncertain",
     "settings.plugins.installModal.installing",
     "settings.plugins.installModal.missingEnv",
