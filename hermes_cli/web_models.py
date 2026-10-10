@@ -538,6 +538,10 @@ class _AgentPluginInstallBody(BaseModel):
     catalog_name: Optional[str] = None
     # Pin a custom source to one full 40-hex commit SHA (same contract as ``--ref``).
     ref: Optional[str] = None
+    # Explicit user consent for Python dependency installation on forced replacement.
+    # None (field absent) keeps server-side derivation (enable and not force); an
+    # explicit False never grants consent, so consent is never assumed by default.
+    assume_deps_consent: Optional[bool] = None
 
 class _PluginProvidersPutBody(BaseModel):
     memory_provider: Optional[str] = None
