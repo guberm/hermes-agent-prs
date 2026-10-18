@@ -15,7 +15,15 @@
  *     the bridge has no session-window support.
  */
 import type { WorkspaceMode } from '@/contrib/types'
-import { $activeSessionId, $selectedStoredSessionId, markSessionRead, requestSessionResume } from '@/store/session'
+import {
+  $activeSessionId,
+  $selectedStoredSessionId,
+  markSessionRead,
+  requestSessionResume,
+  setRememberedRoute,
+  setRememberedSessionId
+} from '@/store/session'
+import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
 import type { SessionProfileRoute } from '@/store/session-request-router'
 import {
   focusedSessionNeedsRoute,
@@ -110,6 +118,23 @@ export function openSessionFromPicker(
  * @param navigate Required for `in-place` (route into main when not on screen).
  *   `tab` / `window` ignore it — pass a no-op when you don't have a router handle.
  */
+/** Opening a chat as a TAB does not navigate, so the route effect (which only
+ *  sees session routes) would never remember it: the next cold start restored
+ *  the tabs but came back on an empty draft in main — the "5 tabs became 4 + an
+ *  empty one" report. Remember the chat this open lands on, exactly as an
+ *  in-place open's route does, so `display.resume_last_session` can bring main
+ *  back to it. Best-effort: a storage hiccup must not break the open. */
+function rememberOpenedChat(storedSessionId: string) {
+  try {
+    const profile = normalizeProfileKey($activeGatewayProfile.get())
+
+    setRememberedSessionId(storedSessionId, profile)
+    setRememberedRoute(sessionRoute(storedSessionId), profile)
+  } catch {
+    // See above: remembering is a nicety, the open itself is the job.
+  }
+}
+
 export function openSession(
   storedSessionId: string,
   navigate: OpenSessionNavigate,
@@ -169,6 +194,8 @@ export function openSession(
   }
 
   if (resolved === 'tab') {
+    rememberOpenedChat(storedSessionId)
+
     // Already on screen? Front it. openSessionTile would no-op on main without
     // focusing, or try to relocate an existing tile — neither is right for a
     // soft "open beside" link.

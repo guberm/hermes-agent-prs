@@ -304,4 +304,22 @@ describe('openSession', () => {
     expect(navigate).not.toHaveBeenCalled()
     expect(focusOpenSession).not.toHaveBeenCalled()
   })
+
+  // A tab open does not navigate, so the route effect (which only sees session
+  // routes) never learns about it: the next cold start restored the tabs but
+  // came back on an empty draft in main — "there were 5 tabs, after opening: 4
+  // plus an empty one".
+  it('remembers the chat a tab open lands on, so a cold start can restore main', async () => {
+    const { getRememberedSessionId, setRememberedSessionId } = await import('@/store/session')
+    const { $activeGatewayProfile, normalizeProfileKey } = await import('@/store/profile')
+
+    const profile = normalizeProfileKey($activeGatewayProfile.get())
+
+    setRememberedSessionId(null, profile)
+    focusOpenSession.mockReturnValue(null)
+
+    openSession('tabbed-chat', navigate, 'tab')
+
+    expect(getRememberedSessionId(profile)).toBe('tabbed-chat')
+  })
 })
