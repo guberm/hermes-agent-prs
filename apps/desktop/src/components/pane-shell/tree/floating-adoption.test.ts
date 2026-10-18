@@ -61,6 +61,48 @@ describe('floating panes stay out of the layout tree', () => {
     expect(ids).toContain('files')
   })
 
+  // A restored tab is anchored to ANOTHER tab (a chat stacked beside its
+  // sibling), so adoption has to resolve those anchors in dependency order. One
+  // pass over a list where a child precedes its anchor met a missing anchor,
+  // fell through to the `mainId` fallback, and docked the tab into the main zone
+  // — the "tabs come back, but not in the section they were in" report.
+  it('docks a tab anchored to another tab into that tab\'s zone, not the main zone', async () => {
+    const { model, registry, tree } = await setup()
+
+    // Child-first registration order: the hardest order for a single pass.
+    registry.register({
+      id: 'session-tile:c',
+      area: 'panes',
+      title: 'C',
+      data: { dock: { before: null, pane: 'session-tile:b', pos: 'center' }, placement: 'main' },
+      render: () => null
+    })
+    registry.register({
+      id: 'session-tile:b',
+      area: 'panes',
+      title: 'B',
+      data: { dock: { before: null, pane: 'session-tile:a', pos: 'center' }, placement: 'main' },
+      render: () => null
+    })
+    registry.register({
+      id: 'session-tile:a',
+      area: 'panes',
+      title: 'A',
+      data: { dock: { before: null, pane: 'workspace', pos: 'right' }, placement: 'main' },
+      render: () => null
+    })
+
+    tree.watchContributedPanes()
+
+    const layout = tree.$layoutTree.get()!
+    const groupOf = (id: string) => model.findGroupOfPane(layout, id)?.id
+
+    expect(groupOf('session-tile:b')).toBe(groupOf('session-tile:a'))
+    expect(groupOf('session-tile:c')).toBe(groupOf('session-tile:a'))
+    // And that zone is the one A docked beside workspace — not main.
+    expect(groupOf('session-tile:a')).not.toBe(groupOf('workspace'))
+  })
+
   it('survives a registry change without ever adopting the floating pane', async () => {
     const { model, registry, tree } = await setup()
 

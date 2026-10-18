@@ -1568,38 +1568,76 @@ export function adoptContributedPanes(): void {
 
   let next = healed
 
-  for (const pane of anchorsFirst(missing, id => dataOf(id)?.dock?.pane)) {
+  /** Dock one pane. `strict` refuses to fall back when the pane's own anchor
+   *  is not in the tree yet — see the passes below. */
+  const dockPane = (pane: (typeof missing)[number], strict: boolean): boolean => {
     const dock = dataOf(pane.id)?.dock
     const placement = placementOf(pane.id) ?? 'right'
+    const anchored = dock && allPaneIds(next).includes(dock.pane) ? dock.pane : undefined
+
+    if (strict && dock?.pane && !anchored) {
+      return false
+    }
 
     const anchor =
-      (dock && allPaneIds(next).includes(dock.pane) ? dock.pane : undefined) ??
+      anchored ??
       allPaneIds(next).find(id => id !== pane.id && placementOf(id) === placement) ??
       mainId
 
     const target = findGroupOfPane(next, anchor ?? '')?.id
 
-    if (target) {
-      // Silent adoption: don't front over the zone's active tab — a reveal
-      // does. An edge dock re-takes the share the pane held when it closed —
-      // but only against the seam partner it was recorded with (#108679).
-      //
-      // Nothing writes the strip choice afterwards. This used to read the
-      // host's hidden flag before the insert and stamp it back on after, purely
-      // to undo the pin `insertAtGroup` applied; with the pin gone the zone's
-      // own preference simply survives, and the adopted pane arrives with a
-      // chip whenever auto says the zone has more than one.
-      next =
-        insertAtGroup(
-          next,
-          target,
-          pane.id,
-          dock?.pos ?? 'center',
-          dock?.before,
-          false,
-          recalledEdgeWeights(pane.id, anchor)
-        ) ?? next
+    if (!target) {
+      return false
     }
+
+    // Silent adoption: don't front over the zone's active tab — a reveal
+    // does. An edge dock re-takes the share the pane held when it closed —
+    // but only against the seam partner it was recorded with (#108679).
+    //
+    // Nothing writes the strip choice afterwards. This used to read the
+    // host's hidden flag before the insert and stamp it back on after, purely
+    // to undo the pin `insertAtGroup` applied; with the pin gone the zone's
+    // own preference simply survives, and the adopted pane arrives with a
+    // chip whenever auto says the zone has more than one.
+    next =
+      insertAtGroup(
+        next,
+        target,
+        pane.id,
+        dock?.pos ?? 'center',
+        dock?.before,
+        false,
+        recalledEdgeWeights(pane.id, anchor)
+      ) ?? next
+
+    return true
+  }
+
+  // A tile is routinely anchored to ANOTHER tile (a chat stacked beside its
+  // sibling). Adopting in one pass met a sibling anchor that was itself still
+  // missing, fell through to the placement/`mainId` fallback, and docked the
+  // restored tab into the main zone — "the tabs came back, but in the wrong
+  // section" (and beside the boot draft, so an empty New-session tab sat in the
+  // same strip). Insert what resolves, repeat with the rest: every productive
+  // pass adds at least one pane, so a chain unwinds.
+  let pending = anchorsFirst(missing, id => dataOf(id)?.dock?.pane)
+
+  while (pending.length > 0) {
+    const unresolved = pending.filter(pane => !dockPane(pane, true))
+
+    if (unresolved.length === pending.length) {
+      pending = unresolved
+
+      break
+    }
+
+    pending = unresolved
+  }
+
+  // Anchors that are genuinely gone (a closed tab, another profile's pane) keep
+  // the historical fallback so a pane is never left out of the layout.
+  for (const pane of pending) {
+    dockPane(pane, false)
   }
 
   if (next !== tree) {
