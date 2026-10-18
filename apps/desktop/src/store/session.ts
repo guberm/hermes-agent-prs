@@ -1,4 +1,4 @@
-import type { ConnectionState } from '@hermes/shared'
+import { LOCAL_CONNECTION_ID, type ConnectionState } from '@hermes/shared'
 import { atom, computed } from 'nanostores'
 
 import { setApiRequestLocalMode } from '@/api/client'
@@ -85,6 +85,23 @@ function storedComposerString(base: string): string | null {
 const LAST_SESSION_KEY = 'hermes.desktop.lastSessionId'
 const LAST_ROUTE_KEY = 'hermes.desktop.lastRoute'
 
+/** Connection scope for remembered navigation: the STABLE identity (the
+ *  registry connection id; a local backend has none), NOT the base URL.
+ *  `activeConnectionScopeSuffix()` keys on the URL, and a remote whose URL
+ *  carries an ephemeral port — a local forward or tunnel — mints a new suffix
+ *  on every launch. The remembered session and route then went to a key the
+ *  next run never read: the window came back on an empty draft in the main slot
+ *  while the session tabs (scoped by the stable id) restored fine. */
+function rememberedNavigationSuffix(profile: string): string {
+  const id = $connection.get()?.connectionId?.trim()
+
+  if (!id || id === LOCAL_CONNECTION_ID) {
+    return ''
+  }
+
+  return `.conn.${encodeURIComponent(id)}.${encodeURIComponent(profile)}`
+}
+
 function profileNavigationKey(base: string, profile: string): string {
   const key = profile.trim() || 'default'
 
@@ -93,7 +110,7 @@ function profileNavigationKey(base: string, profile: string): string {
   // different gateways share this localStorage area — restoring one
   // gateway's remembered session under another navigates to a session that
   // backend has never seen (#77318).
-  return `${base}.profile.${encodeURIComponent(key)}${activeConnectionScopeSuffix()}`
+  return `${base}.profile.${encodeURIComponent(key)}${rememberedNavigationSuffix(key)}`
 }
 
 // Discard legacy global keys once per tick. A module-level flag avoids
@@ -135,10 +152,50 @@ export function _resetLegacyDiscardForTests(): void {
   legacyDiscardNeeded = true
 }
 
-export function getRememberedSessionId(profile: string): null | string {
+function readRememberedNavigation(base: string, profile: string): null | string {
   discardLegacyRememberedNavigation()
 
-  return storedString(profileNavigationKey(LAST_SESSION_KEY, profile))
+  const exact = storedString(profileNavigationKey(base, profile))
+
+  if (exact !== null) {
+    return exact
+  }
+
+  // An UNREGISTERED remote (older/direct) has only its URL as identity, and a
+  // moved port strands its remembered chat the same way — with no registry id
+  // there is nothing else to trust, so adopt the first key carrying the profile
+  // prefix. A REGISTERED connection stays strict: crossing gateways on the same
+  // profile name is the session-not-found bug this scope exists to prevent.
+  const registered = $connection.get()?.connectionId?.trim()
+
+  if (registered || typeof localStorage === 'undefined') {
+    return null
+  }
+
+  const prefix = `${base}.profile.${encodeURIComponent(profile.trim() || 'default')}`
+
+  for (let i = 0; i < localStorage.length; i += 1) {
+    const key = localStorage.key(i)
+
+    // The suffix always opens with `.`, so the next char is what tells two
+    // profiles apart: without it a read for `ops` would answer with the value
+    // remembered for `ops-session`.
+    if (!key || (key !== prefix && !key.startsWith(`${prefix}.`))) {
+      continue
+    }
+
+    const value = storedString(key)
+
+    if (value !== null) {
+      return value
+    }
+  }
+
+  return null
+}
+
+export function getRememberedSessionId(profile: string): null | string {
+  return readRememberedNavigation(LAST_SESSION_KEY, profile)
 }
 
 export function setRememberedSessionId(id: null | string, profile: string): void {
@@ -316,9 +373,7 @@ export function rememberedSessionProfile(
 // (#67603 family). Legacy global values are discarded on first read.
 
 export function getRememberedRoute(profile: string): null | string {
-  discardLegacyRememberedNavigation()
-
-  return storedString(profileNavigationKey(LAST_ROUTE_KEY, profile))
+  return readRememberedNavigation(LAST_ROUTE_KEY, profile)
 }
 
 export function setRememberedRoute(path: null | string, profile: string): void {
