@@ -1061,6 +1061,9 @@ export function ContribWiring({ children }: { children: ReactNode }) {
   // hint first: older builds incorrectly persisted those rows as `local`,
   // which made a remote session click switch to the Mac backend and fail with
   // "session not found".
+  // A sidebar click opens the chat as a TAB: `openSession`'s tab path fronts an
+  // already-open tile and only stacks a new one when the chat has none, so a
+  // second click can never duplicate a tab.
   const openStoredSession = (sessionId: string, session?: SessionInfo) => {
     const ownerRoute = sessionOwnerRouteFromRow(session)
 
@@ -1071,7 +1074,7 @@ export function ContribWiring({ children }: { children: ReactNode }) {
       requestSessionResume(sessionId)
     }
 
-    openSession(sessionId, navigate)
+    openSession(sessionId, navigate, 'tab')
   }
 
   // The controller's entire callback surface, gathered into the stable
