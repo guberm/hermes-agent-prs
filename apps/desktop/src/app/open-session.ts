@@ -15,6 +15,7 @@
  *     the bridge has no session-window support.
  */
 import type { WorkspaceMode } from '@/contrib/types'
+import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
 import {
   $activeSessionId,
   $selectedStoredSessionId,
@@ -23,7 +24,7 @@ import {
   setRememberedRoute,
   setRememberedSessionId
 } from '@/store/session'
-import { $activeGatewayProfile, normalizeProfileKey } from '@/store/profile'
+import { noteUserSessionOpen } from '@/store/session-open-intent'
 import type { SessionProfileRoute } from '@/store/session-request-router'
 import {
   focusedSessionNeedsRoute,
@@ -165,6 +166,9 @@ export function openSession(
     // No pop-out support → treat like a new tab.
     resolved = 'tab'
   }
+
+  // A chat opened in this window: the launch restore must not close it.
+  noteUserSessionOpen()
 
   if (resolved === 'main') {
     // Canonical relationship chats explicitly own the main workspace. Route
